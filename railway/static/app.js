@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-let ready=false, busy=false, pending=null;
+let ready=false, busy=false, pending=null, forums=[];
 async function api(path, options={}) {
  const response=await fetch(path,{...options,headers:{'Content-Type':'application/json','X-Panel-Request':'1',...(options.headers||{})}});
  if(response.status===401) throw new Error('Нет доступа. Обновите страницу и войдите снова.');
@@ -33,7 +33,8 @@ async function history(){
 async function load(){
  try{
  const data=await api('/api/catalog');$('guild').textContent=data.guild;
- $('channel').replaceChildren(new Option('Выберите канал',''));
+ forums=data.channels;
+ $('channel').replaceChildren(new Option('Выберите форум',''));
  for(const channel of data.channels)$('channel').add(new Option((channel.category?channel.category+' / ':'')+'#'+channel.name,channel.id));
  $('channel').disabled=false;$('roles').replaceChildren();
  for(const role of data.roles){
@@ -44,15 +45,23 @@ async function load(){
  }
  if(!data.roles.length)$('roles').textContent='На сервере нет доступных ролей.';
  ready=true;$('submit').disabled=false;
- if(!data.channels.length)notice('Нет каналов с правами просмотра, отправки сообщений и встраивания ссылок.');
+ if(!data.channels.length)notice('Нет доступных форумов. Проверьте права бота на создание постов, сообщения в постах и встраивание ссылок.');
  }catch(error){notice(error.message);$('guild').textContent='Нет связи с ботом';}
  await history();
 }
+function updateTags(){
+ const forum=forums.find(f=>f.id===$('channel').value);
+ $('tag').replaceChildren(new Option(forum?.requires_tag?'Выберите тег':'Без тега',''));
+ for(const tag of forum?.tags||[])$('tag').add(new Option(tag.name,tag.id));
+ $('tag-label').hidden=!(forum?.tags?.length||forum?.requires_tag);
+ $('tag').required=!!forum?.requires_tag;
+}
+$('channel').addEventListener('change',updateTags);
 $('role-search').addEventListener('input',()=>{const q=$('role-search').value.toLocaleLowerCase();document.querySelectorAll('.role').forEach(r=>r.hidden=!r.dataset.name.includes(q));});
 $('event-form').addEventListener('input',preview);
 $('event-form').addEventListener('submit',async event=>{
  event.preventDefault();if(!ready||busy)return;
- const body={title:$('title').value.trim(),text:$('text').value.trim(),starts_at:$('starts').value+':00+03:00',channel_id:$('channel').value,role_ids:[...document.querySelectorAll('#roles input:checked')].map(r=>r.value)};
+ const body={title:$('title').value.trim(),text:$('text').value.trim(),starts_at:$('starts').value+':00+03:00',channel_id:$('channel').value,tag_id:$('tag').value,role_ids:[...document.querySelectorAll('#roles input:checked')].map(r=>r.value)};
  if(body.role_ids.length>50){notice('Выберите не больше 50 ролей.');return;}
  const fingerprint=JSON.stringify(body);
  if(!pending||pending.fingerprint!==fingerprint)pending={fingerprint,id:crypto.randomUUID()};
@@ -60,7 +69,7 @@ $('event-form').addEventListener('submit',async event=>{
  try{
   await api('/api/events',{method:'POST',body:JSON.stringify(body)});
   notice('Событие опубликовано. Участники могут записываться в Discord.',true);
-  $('event-form').reset();pending=null;preview();await history();
+  $('event-form').reset();pending=null;updateTags();preview();await history();
  }catch(error){notice(error.message);}
  finally{busy=false;$('submit').disabled=false;$('submit').textContent='Опубликовать событие';}
 });
