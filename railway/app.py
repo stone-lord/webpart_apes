@@ -73,6 +73,8 @@ def create_app():
     app.router.add_get('/api/catalog', proxy)
     app.router.add_get('/api/events', proxy)
     app.router.add_post('/api/events', proxy)
+    app.router.add_post('/api/events/{event_id}/cancel', proxy)
+    app.router.add_post('/api/events/{event_id}/rename', proxy)
     app.router.add_static('/static/', ROOT/'static', show_index=False)
     return app
 
